@@ -1,0 +1,23 @@
+_BASE_: ../Base-Mask-Refiner.yaml
+MODEL:
+  PIXEL_MEAN: [127.5, 127.5, 127.5] 
+  PIXEL_STD: [1, 1, 1]
+  BACKBONE:
+    NAME: "build_resnet_deeplab_fusion_backbone"
+    FUSION_STRATEGY: "concat"
+    NUM_FUSION_LAYERS: 2
+  INS_EMBED_HEAD:
+    HIERARCHICAL_FUSION_ON: True
+    EEE_MASK_ON: False
+    HIERARCHY: [["eee_boundary"], ["foreground", "center", "offset"]]
+    NUM_FUSION_LAYERS: 3
+    FUSION_TARGET: ["feat", "pred"]
+    ERROR_TYPE: "e3"
+SOLVER:
+  OPTIMIZER: "ADAM"
+  BASE_LR: 0.000125
+  IMS_PER_BATCH: 8
+INPUT:
+  DEPTH_ON: True
+  RGB_ON: False
+SEED: 77

@@ -1,0 +1,9 @@
+_BASE_: Base-Mask-Refiner.yaml
+MODEL:
+  BACKBONE:
+    NAME: "build_resnet_deeplab_rgbd_fusion_backbone"
+    FUSION_STRATEGY: "concat"
+    NUM_FUSION_LAYERS: 3
+  INS_EMBED_HEAD:
+    EEE_MASK_ON: False
+    EEE_BOUNDARY_ON: False

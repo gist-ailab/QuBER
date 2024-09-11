@@ -1,0 +1,41 @@
+# hyper params
+"batch_size": 16
+"lr": 0.0001
+"wd": 0.000001
+
+# datasets
+"train_set": "uoais_sim_train"
+"val_set": "uoais_sim_val"
+"img_size": [640, 480] # width, height
+
+
+# models
+"encoder_name": "resnet34" # timm
+"encoder_weights": "imagenet"
+"encoder_depth": 3
+"encoder_output_stride": 32
+"decoder_name": "pspdecoder"
+"decoder_dim": 512
+
+
+# loss
+"loss": "DiceCELoss"
+"loss_kwargs":
+  {"sigmoid": True}
+"true_consistency": False
+"positive_consistency": False
+"use_relu_on_consistency": False
+
+# inputs
+"inputs": ["offset", "fg_mask", "boundary", "rgb"]
+"heads": ["mask", "boundary"]
+"targets": ["tp", "tn", "fp"]
+
+# configs
+"n_epoch": 50
+"vis_interval": 1000
+"n_vis": 5
+"log_dir": "output"
+
+# resume
+"ckpt_path": "/home/vision/catkin_ws/src/sop-perception/robot-in-hand-seg/ckpts/epoch_42.pkl"

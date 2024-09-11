@@ -1,0 +1,6 @@
+[submodule "UnseenObjectsWithMeanShift"]
+	path = UnseenObjectsWithMeanShift
+	url = https://github.com/YoungSean/UnseenObjectsWithMeanShift
+[submodule "UnseenObjectClustering"]
+	path = UnseenObjectClustering
+	url = https://github.com/NVlabs/UnseenObjectClustering

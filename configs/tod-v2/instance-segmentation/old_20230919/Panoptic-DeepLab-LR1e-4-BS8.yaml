@@ -1,0 +1,4 @@
+_BASE_: Base-Panoptic-DeepLab.yaml
+SOLVER:
+  BASE_LR: 0.0001
+  IMS_PER_BATCH: 16

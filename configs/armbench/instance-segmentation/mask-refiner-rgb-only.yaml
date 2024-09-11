@@ -1,0 +1,12 @@
+_BASE_: Base-Mask-Refiner.yaml
+MODEL:
+  BACKBONE:
+    NAME: "build_resnet_deeplab_fusion_backbone"
+  RESNETS:
+    OUT_FEATURES: ["res2", "res3", "res5"]
+    RES5_DILATION: 2
+  PIXEL_MEAN: [103.530, 116.280, 123.675]
+  PIXEL_STD: [1, 1, 1]
+INPUT:
+  DEPTH_ON: False
+  PERLIN_DISTORTION_ON: False

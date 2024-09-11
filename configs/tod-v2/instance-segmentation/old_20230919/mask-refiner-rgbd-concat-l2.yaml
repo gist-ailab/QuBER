@@ -1,0 +1,6 @@
+_BASE_: Base-Mask-Refiner.yaml
+MODEL:
+  BACKBONE:
+    NAME: "build_resnet_deeplab_rgbd_fusion_backbone"
+    FUSION_STRATEGY: "concat"
+    NUM_FUSION_LAYERS: 2

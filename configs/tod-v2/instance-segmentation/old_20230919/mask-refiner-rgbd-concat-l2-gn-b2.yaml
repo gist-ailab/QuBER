@@ -1,0 +1,10 @@
+_BASE_: Base-Mask-Refiner.yaml
+MODEL:
+  BACKBONE:
+    NAME: "build_resnet_deeplab_rgbd_fusion_backbone"
+    FUSION_STRATEGY: "add"
+    NUM_FUSION_LAYERS: 4
+SOLVER:
+  OPTIMIZER: "ADAM"
+  BASE_LR: 0.000125
+  IMS_PER_BATCH: 2

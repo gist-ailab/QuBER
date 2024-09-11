@@ -1,0 +1,24 @@
+_BASE_: ../Base-Mask-Refiner.yaml
+MODEL:
+  BACKBONE:
+    NAME: "build_resnet_deeplab_rgbd_fusion_backbone"
+    FUSION_STRATEGY: "concat"
+    NUM_FUSION_LAYERS: 2
+    FREEZE_LAYERS: ['rgb_backbone.res2.2', 'rgb_backbone.res3', 'rgb_backbone.res4', 'rgb_backbone.res5']
+    WEIGHTS: "COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_3x.yaml"
+  INS_EMBED_HEAD:
+    HIERARCHICAL_FUSION_ON: True
+    EEE_MASK_ON: False
+    HIERARCHY: [["eee_boundary"], ["foreground", "center", "offset"]]
+    NUM_FUSION_LAYERS: 3
+    FUSION_TARGET: ["feat", "pred"]
+    ERROR_TYPE: "e3"
+SOLVER:
+  OPTIMIZER: "ADAM"
+  BASE_LR: 0.000125
+  IMS_PER_BATCH: 8
+  MAX_ITER: 180000
+# DATASETS:
+  # TRAIN: ("uoais_sim_val_panoptic",)
+  # TEST: ("",)
+SEED: 77
