@@ -30,9 +30,13 @@ class CGNet():
     def predict(self, rgb_path, depth_path):
 
         rgb_img = cv2.imread(rgb_path)
-        depth_img = imageio.imread(depth_path)
+        if 'npy' in depth_path:
+            depth_img = np.load(depth_path)
+            depth_img = normalize_depth(depth_img, 0.25, 1.5)
+        else:
+            depth_img = imageio.imread(depth_path)
+            depth_img = normalize_depth(depth_img)
         rgb_img = cv2.resize(rgb_img, (w, h))
-        depth_img = normalize_depth(depth_img)
         depth_img = cv2.resize(depth_img, (w, h), interpolation=cv2.INTER_NEAREST)
         depth_img = inpaint_depth(depth_img)
 
@@ -46,6 +50,7 @@ class CGNet():
         fg_output = cv2.resize(fg_output, (W, H), interpolation=cv2.INTER_NEAREST)
 
         return fg_output
+    
     
 
     
@@ -61,12 +66,16 @@ class lmffNet():
     def predict(self, rgb_path, depth_path):
 
         rgb_img = cv2.imread(rgb_path)
-        depth_img = imageio.imread(depth_path)
+        if 'npy' in depth_path:
+            depth_img = np.load(depth_path)
+            depth_img = normalize_depth(depth_img, 0.25, 1.5)
+        else:
+            depth_img = imageio.imread(depth_path)
+            depth_img = normalize_depth(depth_img)
         rgb_img = cv2.resize(rgb_img, (W, H))
         # depth_img = normalize_depth(depth_img, min_val=np.unique(depth_img)[1], max_val=np.max(depth_img))
-        depth_img = normalize_depth(depth_img)
         depth_img = cv2.resize(depth_img, (W, H), interpolation=cv2.INTER_NEAREST)
-        depth_img = inpaint_depth(depth_img)
+        depth_img = inpaint_depth(depth_img, factor=1)
 
         fg_rgb_input = standardize_image(rgb_img)
         fg_rgb_input = array_to_tensor(fg_rgb_input).unsqueeze(0)

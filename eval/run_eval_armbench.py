@@ -25,8 +25,7 @@ refiner_moder = MaskRefiner(config_file, weights_file, dataset='armbench')
 
 for imgid in imgIds:
     img_info = coco.loadImgs(imgid)[0]
-    if img_info['file_name'] != 'N210NHGDKS.jpg':
-        continue
+
     annIds = coco.getAnnIds(imgIds=img_info['id'], catIds=[2])
     anns = coco.loadAnns(annIds)
 
@@ -36,17 +35,16 @@ for imgid in imgIds:
     initial_masks = np.load('vis_npy/{}.npy'.format(img_info['file_name'].split('.')[0])) # (N, H, W)
     H, W = initial_masks.shape[1], initial_masks.shape[2]
     refined_masks, refined_output, refined_pred_time, fg_mask = refiner_moder.predict(img_path, None, initial_masks, None)
-    initial_vis = imgviz.instances2rgb(img.copy(), masks=initial_masks, labels=list(range(initial_masks.shape[0])), line_width=0, boundary_width=3)
+    # gt_masks = [coco.annToMask(ann) for ann in anns]
+    print('hi')
+
+    # visualize    
+    initial_vis = imgviz.instances2rgb(img.copy(), masks=np.array(initial_masks, dtype=bool), labels=list(range(initial_masks.shape[0])), line_width=0, boundary_width=3)
+    # gt_vis = imgviz.instances2rgb(img.copy(), masks=np.array(gt_masks, dtype=bool), labels=list(range(len(gt_masks))), line_width=0, boundary_width=3)
     img = cv2.resize(img, (refined_masks.shape[2], refined_masks.shape[1]))
-    refine_vis = imgviz.instances2rgb(img.copy(), masks=refined_masks, labels=list(range(refined_masks.shape[0])), line_width=0, boundary_width=3)
+    refine_vis = imgviz.instances2rgb(img.copy(), masks=np.array(refined_masks, dtype=bool), labels=list(range(refined_masks.shape[0])), line_width=0, boundary_width=1)
     cv2.imwrite('1.jpg', initial_vis)
     cv2.imwrite('2.jpg', refine_vis)
-
-
-    
-
+    # cv2.imwrite('3.jpg', gt_vis)
 
     
-    break
-
-

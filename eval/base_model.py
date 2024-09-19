@@ -176,9 +176,9 @@ class UOAISNet():
     def __init__(self, use_cgnet=True):
 
         cfg = get_cfg()
-        cfg.merge_from_file('uoais/configs/R50_rgbdconcat_mlc_occatmask_hom_concat.yaml')
+        cfg.merge_from_file('ext_modules/uoais/configs/R50_rgbdconcat_mlc_occatmask_hom_concat.yaml')
         cfg.defrost()
-        cfg.MODEL.WEIGHTS = os.path.join('uoais', cfg.OUTPUT_DIR, "model_final.pth")
+        cfg.MODEL.WEIGHTS = os.path.join('ext_modules', 'uoais', cfg.OUTPUT_DIR, "model_final.pth")
         cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = 0.5
         cfg.MODEL.ROI_HEADS.NMS_THRESH_TEST = 0.5
         cfg.freeze()
@@ -189,11 +189,15 @@ class UOAISNet():
         self.H, self.W = 480, 640
     
     def predict(self, rgb_path, depth_path):
-
+       
         rgb_img = cv2.imread(rgb_path)
-        depth_img = imageio.imread(depth_path)
+        if 'npy' in depth_path:
+            depth_img = np.load(depth_path)
+            depth_img = normalize_depth(depth_img, 0.25, 1.5)
+        else:
+            depth_img = imageio.imread(depth_path)
+            depth_img = normalize_depth(depth_img)
         rgb_img = cv2.resize(rgb_img, (self.W, self.H))
-        depth_img = normalize_depth(depth_img)
         depth_img = cv2.resize(depth_img, (self.W, self.H), interpolation=cv2.INTER_NEAREST)
         depth_img = inpaint_depth(depth_img)
         uoais_input = np.concatenate([rgb_img, depth_img], -1)   
@@ -219,10 +223,9 @@ from segment_anything import SamAutomaticMaskGenerator, sam_model_registry, SamP
 
 class SAM():
 
-    def __init__(self, use_cgnet=True, use_cluster=False):
+    def __init__(self, dataset, depth_input=False):
 
         sam = sam_model_registry["default"](checkpoint="./sam/sam_vit_h_4b8939.pth").cuda()
-        self.use_cluster = use_cluster
         self.mask_generator = SamAutomaticMaskGenerator(sam, output_mode="binary_mask", min_mask_region_area=300)
         # else:
         self.predictor = SamPredictor(sam)
@@ -230,58 +233,42 @@ class SAM():
         # self.cgnet = CGNet()
         self.H, self.W = 480, 640
         self.lmffnet = lmffNet()
+        self.depth_input = depth_input
+        self.dataset = dataset
 
     def predict(self, rgb_path, depth_path):
 
 
         rgb_img = cv2.imread(rgb_path)
         rgb_img = cv2.resize(rgb_img, (self.W, self.H))
+
+        depth_img = imageio.imread(depth_path)
+        depth_img = normalize_depth(depth_img)
+        depth_img = cv2.resize(depth_img, (self.W, self.H), interpolation=cv2.INTER_NEAREST)
+        depth_img = inpaint_depth(depth_img)
+        # colorize depth image
+
+        if self.dataset == 'OCID':
+            _depth_img = imageio.imread(depth_path)
+            zero_depth = np.where(_depth_img == 0, True, False)
+            zero_depth = zero_depth[:, :, 0] if len(zero_depth.shape) == 3 else zero_depth
+
         start_time = time.time()
-        masks = self.mask_generator.generate(rgb_img)
+        if self.depth_input:
+            masks = self.mask_generator.generate(depth_img)
+        else:
+            masks = self.mask_generator.generate(rgb_img)
         pred_masks = [x['segmentation'] for x in masks]
         # cluster construct the connected components, and merge the connected components with the same label
         
-        from scipy import ndimage
-        def merge_connected_components(masks):
-            """
-            Find connected components in binary masks and merge them if connected.
-            
-            Args:
-            masks (np.array): Binary masks of shape [N, H, W]
-            
-            Returns:
-            np.array: Merged masks of shape [N, H, W]
-            """
-            N, H, W = masks.shape
-            merged_masks = np.zeros_like(masks)
-            
-            for n in range(N):
-                # Find connected components
-                labeled, num_features = ndimage.label(masks[n])
-                
-                # If there's only one component or no components, no need to merge
-                if num_features <= 1:
-                    merged_masks[n] = masks[n]
-                    continue
-                
-                # Create a new mask for merged components
-                merged_mask = np.zeros((H, W), dtype=bool)
-                
-                # Merge all connected components
-                for i in range(1, num_features + 1):
-                    merged_mask |= labeled == i
-                
-                merged_masks[n] = merged_mask
-            
-            return merged_masks
-        
-        # if self.use_cluster:
-            # pred_masks = merge_connected_components(np.asarray(pred_masks))
-        # fg_mask = self.cgnet.predict(rgb_path, depth_path)
+
         fg_mask = self.lmffnet.predict(rgb_path, depth_path)
         
         filt_masks = []
         for pred_mask in pred_masks:
+            pred_mask = np.where(zero_depth, False, pred_mask)
+            if np.sum(pred_mask) == 0:
+                continue
             if np.sum(np.bitwise_and(pred_mask, fg_mask)) / np.sum(pred_mask) > 0.3:
                 filt_masks.append(pred_mask)
         pred_masks = np.asarray(filt_masks)
@@ -312,7 +299,7 @@ from groundingdino.util.utils import clean_state_dict, get_phrases_from_posmap
 # refac from https://github.com/IDEA-Research/Grounded-Segment-Anything/blob/main/automatic_label_ram_demo.py
 # code from https://github.com/FANG-Xiaolin/uncos/blob/main/uncos/groundedsam_wrapper.py
 class GroundedSAM:
-    def __init__(self, box_thr=0.2, text_thr=0.05):
+    def __init__(self, box_thr=0.10, text_thr=0.05):
         import groundingdino.config.GroundingDINO_SwinT_OGC
         config_file = groundingdino.config.GroundingDINO_SwinT_OGC.__file__
         cache_dir = os.path.expanduser("~/.cache/uncos")
@@ -349,9 +336,8 @@ class GroundedSAM:
         # load image
         text_prompt = 'A rigid object.'
         # text_prompt = 'box,cereal box,food box,block,chips_can,mug,bowl,cookie_can,cylinderic_object,book,cd,drinks,Bottle'
-        text_prompt = 'Box. Cereal box. Food box. Block. Chips can. Mug. Bowl. Cookie can. Cylinderic object. Book. CD. Drinks. Bottle.'
-        rgb_img = cv2.imread(rgb_path)
-        rgb_img = cv2.resize(rgb_img, (self.W, self.H))[:, :, ::-1]
+        # text_prompt = 'Box. Cereal box. Food box. Block. Chips can. Mug. Bowl. Cookie can. Cylinderic object. Book. CD. Drinks. Bottle.'
+        rgb_img = cv2.imread(rgb_path)[:, :, ::-1]
         image_pil = Image.fromarray(np.uint8(rgb_img))
         transform = T.Compose(
             [
@@ -395,7 +381,7 @@ class GroundedSAM:
             boxes=transformed_boxes.to(self.device),
             multimask_output=False,
         )
-        pred_masks = np.array([mask.astype(bool) for mask in masks[:, 0].detach().cpu().numpy()])
+        pred_masks = np.array([cv2.resize(np.uint8(mask), (self.W, self.H), interpolation=cv2.INTER_NEAREST).astype(bool) for mask in masks[:, 0].detach().cpu().numpy()])
         
         fg_mask = self.lmffnet.predict(rgb_path, depth_path)
         filt_masks = []
@@ -453,7 +439,7 @@ class GroundedSAM:
 
 
 class UOISNet():
-    def __init__(self, repo_path='./uois', dataset='OCID'):
+    def __init__(self, repo_path='./ext_modules/uois', dataset='OCID'):
         uoisnet3d_cfg_filename = repo_path + '/uoisnet3d.yaml'
         dsn_filename = repo_path + '/checkpoint_dir/DepthSeedingNetwork_3D_TOD_checkpoint.pth' 
         rrn_filename = repo_path + '/checkpoint_dir/RRN_OID_checkpoint.pth' 
@@ -475,20 +461,38 @@ class UOISNet():
         rgb_img = cv2.resize(rgb_img, (640, 480))
         rgb_img = standardize_image(rgb_img)
 
-        if self.dataset == 'OSD' or self.dataset == "unstructured_test":
+        if self.dataset == 'OSD':
             pcd_path = depth_path.replace('disparity', 'pcd').replace('.png', '.pcd')
             if not os.path.exists(pcd_path):
                 print('No pcd file found at {0}'.format(pcd_path))
                 raise FileNotFoundError
+            pcd = o3d.io.read_point_cloud(pcd_path)
+            H, W = rgb_img.shape[:2]
+            xyz_img = np.asarray(pcd.points).reshape((H, W, 3))
         elif self.dataset in ['OCID', 'HOPE', 'DoPose']:
             pcd_path = depth_path.replace('depth', 'pcd').replace('.png', '.pcd')
             if not os.path.exists(pcd_path):
                 print('No pcd file found at {0}'.format(pcd_path))
                 raise FileNotFoundError
-        
-        pcd = o3d.io.read_point_cloud(pcd_path)
-        H, W = rgb_img.shape[:2]
-        xyz_img = np.asarray(pcd.points).reshape((H, W, 3))
+            pcd = o3d.io.read_point_cloud(pcd_path)
+            H, W = rgb_img.shape[:2]
+            xyz_img = np.asarray(pcd.points).reshape((H, W, 3))
+        elif self.dataset == 'WISDOM': 
+            cx, cy, fx, fy = 511.5, 384.0, 1105.0, 1105.0
+            ori_width, ori_height = 1032, 772
+            depth_img = np.load(depth_path).astype(np.float32)
+            depth_img = cv2.resize(depth_img, (640, 480))
+            cx = cx / ori_width * 640
+            cy = cy / ori_height * 480
+            fx = fx / ori_width * 640
+            fy = fy / ori_height * 480
+            points_z = depth_img 
+            xmap, ymap = np.arange(640), np.arange(480)
+            xmap, ymap = np.meshgrid(xmap, ymap)
+            points_x = (xmap - cx) / fx * points_z
+            points_y = (ymap - cy) / fy * points_z
+            xyz_img = np.stack([points_x, points_y, points_z], axis=-1)
+            xyz_img = xyz_img.reshape((480, 640, 3))
         xyz_img[np.isnan(xyz_img)] = 0
         # multiply -1 to y axis
         xyz_img[:, :, 1] *= -1
@@ -519,9 +523,9 @@ class UCN():
     def __init__(self, repo_path='./UnseenObjectClustering', dataset='OCID', zoom_in=False): 
 
         network_name = 'seg_resnet34_8s_embedding'
-        pretrained = './UnseenObjectClustering/data/checkpoints/seg_resnet34_8s_embedding_cosine_rgbd_add_sampling_epoch_16.checkpoint.pth'
-        cfg_file = './UnseenObjectClustering/experiments/cfgs/seg_resnet34_8s_embedding_cosine_rgbd_add_tabletop.yml'
-        pretrained_crop = './UnseenObjectClustering/data/checkpoints/seg_resnet34_8s_embedding_cosine_rgbd_add_crop_sampling_epoch_16.checkpoint.pth'
+        pretrained = 'ext_modules/UnseenObjectClustering/data/checkpoints/seg_resnet34_8s_embedding_cosine_rgbd_add_sampling_epoch_16.checkpoint.pth'
+        cfg_file = 'ext_modules/UnseenObjectClustering/experiments/cfgs/seg_resnet34_8s_embedding_cosine_rgbd_add_tabletop.yml'
+        pretrained_crop = 'ext_modules/UnseenObjectClustering/data/checkpoints/seg_resnet34_8s_embedding_cosine_rgbd_add_crop_sampling_epoch_16.checkpoint.pth'
 
         self.dataset = dataset
         self.zoom_in = zoom_in
@@ -555,19 +559,36 @@ class UCN():
         im_tensor = torch.from_numpy(rgb_img).cuda() / 255.0
         im_tensor -= self._pixel_mean
         image_blob = im_tensor.permute(2, 0, 1).float().unsqueeze(0)
-        if self.dataset == 'OSD' or self.dataset == "unstructured_test":
+        if self.dataset == 'OSD':
             pcd_path = depth_path.replace('disparity', 'pcd').replace('.png', '.pcd')
             if not os.path.exists(pcd_path):
                 print('No pcd file found at {0}'.format(pcd_path))
                 raise FileNotFoundError
+            pcd = o3d.io.read_point_cloud(pcd_path)
+            xyz_img = np.asarray(pcd.points).reshape((480, 640, 3)) 
         elif self.dataset in ['OCID', 'HOPE', 'DoPose']:
             pcd_path = depth_path.replace('depth', 'pcd').replace('.png', '.pcd')
             if not os.path.exists(pcd_path):
                 print('No pcd file found at {0}'.format(pcd_path))
                 raise FileNotFoundError
-        
-        pcd = o3d.io.read_point_cloud(pcd_path)
-        xyz_img = np.asarray(pcd.points).reshape((480, 640, 3)) 
+            pcd = o3d.io.read_point_cloud(pcd_path)
+            xyz_img = np.asarray(pcd.points).reshape((480, 640, 3)) 
+        elif self.dataset == 'WISDOM': 
+            cx, cy, fx, fy = 511.5, 384.0, 1105.0, 1105.0
+            ori_width, ori_height = 1032, 772
+            depth_img = np.load(depth_path).astype(np.float32)
+            depth_img = cv2.resize(depth_img, (640, 480))
+            cx = cx / ori_width * 640
+            cy = cy / ori_height * 480
+            fx = fx / ori_width * 640
+            fy = fy / ori_height * 480
+            points_z = depth_img 
+            xmap, ymap = np.arange(640), np.arange(480)
+            xmap, ymap = np.meshgrid(xmap, ymap)
+            points_x = (xmap - cx) / fx * points_z
+            points_y = (ymap - cy) / fy * points_z
+            xyz_img = np.stack([points_x, points_y, points_z], axis=-1)
+            xyz_img = xyz_img.reshape((480, 640, 3))
         xyz_img[np.isnan(xyz_img)] = 0
 
         depth_blob = torch.from_numpy(xyz_img).permute(2, 0, 1).float().unsqueeze(0)
@@ -944,12 +965,11 @@ class MSMFormer():
     def __init__(self, repo_path='./uois', dataset='OCID', zoom_in=False):
         
 
-        cfg_file_MSMFormer = os.path.join('UnseenObjectsWithMeanShift/MSMFormer/configs/tabletop_pretrained.yaml')
-        weight_path_MSMFormer = os.path.join("UnseenObjectsWithMeanShift/data/checkpoints/norm_model_0069999.pth")
+        cfg_file_MSMFormer = os.path.join('ext_modules/UnseenObjectsWithMeanShift/MSMFormer/configs/tabletop_pretrained.yaml')
+        weight_path_MSMFormer = os.path.join("ext_modules/UnseenObjectsWithMeanShift/data/checkpoints/norm_model_0069999.pth")
 
-
-        cfg_file_MSMFormer_crop = os.path.join("UnseenObjectsWithMeanShift/MSMFormer/configs/crop_tabletop_pretrained.yaml")
-        weight_path_MSMFormer_crop = os.path.join("UnseenObjectsWithMeanShift/data/checkpoints/crop_dec9_model_final.pth")
+        cfg_file_MSMFormer_crop = os.path.join("ext_modules/UnseenObjectsWithMeanShift/MSMFormer/configs/crop_tabletop_pretrained.yaml")
+        weight_path_MSMFormer_crop = os.path.join("ext_modules/UnseenObjectsWithMeanShift/data/checkpoints/crop_dec9_model_final.pth")
 
         self.predictor, self.cfg = self.get_general_predictor(cfg_file_MSMFormer, weight_path_MSMFormer, 'RGBD_ADD')
         self.predictor_crop, self.cfg_crop = self.get_general_predictor(cfg_file_MSMFormer_crop, weight_path_MSMFormer_crop, 'RGBD_ADD')
@@ -961,10 +981,10 @@ class MSMFormer():
         
         from detectron2.projects.deeplab import add_deeplab_config
         from detectron2.config import get_cfg
-        sys.path.append('UnseenObjectsWithMeanShift/MSMFormer')
+        sys.path.append('ext_modules/UnseenObjectsWithMeanShift/MSMFormer')
         from meanshiftformer.config import add_meanshiftformer_config
         from tabletop_config import add_tabletop_config
-        sys.path.append('UnseenObjectsWithMeanShift/lib')
+        sys.path.append('ext_modules/UnseenObjectsWithMeanShift/lib')
         from fcn.test_utils import Network_RGBD
 
         cfg = get_cfg()
@@ -1248,14 +1268,31 @@ class MSMFormer():
             if not os.path.exists(pcd_path):
                 print('No pcd file found at {0}'.format(pcd_path))
                 raise FileNotFoundError
+            pcd = o3d.io.read_point_cloud(pcd_path)
+            xyz_img = np.asarray(pcd.points).reshape((480, 640, 3))
         elif self.dataset in ['OCID', 'HOPE', 'DoPose']:
             pcd_path = depth_path.replace('depth', 'pcd').replace('.png', '.pcd')
             if not os.path.exists(pcd_path):
                 print('No pcd file found at {0}'.format(pcd_path))
                 raise FileNotFoundError
-        
-        pcd = o3d.io.read_point_cloud(pcd_path)
-        xyz_img = np.asarray(pcd.points).reshape((480, 640, 3))
+            pcd = o3d.io.read_point_cloud(pcd_path)
+            xyz_img = np.asarray(pcd.points).reshape((480, 640, 3))
+        elif self.dataset == 'WISDOM': 
+            cx, cy, fx, fy = 511.5, 384.0, 1105.0, 1105.0
+            ori_width, ori_height = 1032, 772
+            depth_img = np.load(depth_path).astype(np.float32)
+            depth_img = cv2.resize(depth_img, (640, 480))
+            cx = cx / ori_width * 640
+            cy = cy / ori_height * 480
+            fx = fx / ori_width * 640
+            fy = fy / ori_height * 480
+            points_z = depth_img 
+            xmap, ymap = np.arange(640), np.arange(480)
+            xmap, ymap = np.meshgrid(xmap, ymap)
+            points_x = (xmap - cx) / fx * points_z
+            points_y = (ymap - cy) / fy * points_z
+            xyz_img = np.stack([points_x, points_y, points_z], axis=-1)
+            xyz_img = xyz_img.reshape((480, 640, 3))
         xyz_img[np.isnan(xyz_img)] = 0
 
         depth_blob = torch.from_numpy(xyz_img).permute(2, 0, 1).float()

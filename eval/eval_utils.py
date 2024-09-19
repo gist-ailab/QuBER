@@ -54,9 +54,9 @@ def run_eval(args):
     elif args.base_model == "msmformer-zoomin":
         base_model = MSMFormer(dataset=args.test_dataset, zoom_in=True)
     elif args.base_model == "sam":
-        base_model = SAM()
-    elif args.base_model == "sam-cluster":
-        base_model = SAM(use_cluster=True)
+        base_model = SAM(dataset=args.test_dataset)
+    elif args.base_model == "sam-depth":
+        base_model = SAM(dataset=args.test_dataset, depth_input=True)
     elif args.base_model == "npy":
         base_model = LoadNpyBaseModel(npy_folder='/SSDe/seunghyeok_back/mask-refiner/segfix/{}/initial_mask_predict_ucn_zoomin'.format(args.test_dataset))
     elif args.base_model == "empty":
@@ -77,10 +77,6 @@ def run_eval(args):
         refiner_model = MaskRefiner(args.config_file, 
                                 weights_file = args.weights_file,
                                 dataset=args.test_dataset)
-    elif args.refiner_model == "maskrefiner-tta":
-        refiner_model = MaskRefinerTTA(args.config_file, 
-                                weights_file = args.weights_file,
-                                dataset=args.test_dataset)
     elif args.refiner_model == "cascadepsp":
         refiner_model = CascadePSP(L=900, fast=False, dataset=args.test_dataset)
     elif args.refiner_model == "cascadepsp-rgbd":
@@ -91,8 +87,12 @@ def run_eval(args):
                             )
     elif args.refiner_model == "sam":
         refiner_model = SAMRefiner(prompt_type='mask', dataset=args.test_dataset)
+    elif args.refiner_model == "hq-sam-pretrained":
+        refiner_model = SAMRefiner(prompt_type='mask', dataset=args.test_dataset, hq=True, pretrained=True)
     elif args.refiner_model == "hq-sam":
-        refiner_model = SAMRefiner(prompt_type='mask', dataset=args.test_dataset, hq=True)
+        refiner_model = SAMRefiner(prompt_type='mask', dataset=args.test_dataset, hq=True, pretrained=False)
+        # print number of parameters
+        print("Number of parameters: ", sum(p.numel() for p in refiner_model.sam.parameters()))
     elif args.refiner_model == "save":
         refiner_model = None
     elif args.refiner_model == "npy":
@@ -113,6 +113,18 @@ def run_eval(args):
         assert len(rgb_paths) == len(anno_paths)
         print(colored("Evaluation on OSD dataset: {} rgbs, {} depths, {} visible masks".format(
                     len(rgb_paths), len(depth_paths), len(anno_paths)), "green"))
+
+    elif args.test_dataset == "WISDOM":
+        args.dataset_path = 'detectron2_datasets/wisdom-real/high-res'
+        test_indices = np.load(os.path.join(args.dataset_path, 'test_indices.npy'))
+        rgb_paths = [os.path.join(args.dataset_path, 'color_ims', 'image_{:06d}.png'.format(i)) for i in test_indices]
+        depth_paths = [os.path.join(args.dataset_path, 'depth_ims_numpy', 'image_{:06d}.npy'.format(i)) for i in test_indices]
+        anno_paths = [os.path.join(args.dataset_path, 'modal_segmasks', 'image_{:06d}.png'.format(i)) for i in test_indices]
+        assert len(rgb_paths) == len(depth_paths)
+        assert len(rgb_paths) == len(anno_paths)
+        print(colored("Evaluation on WISDOM dataset: {} rgbs, {} depths, {} visible masks".format(
+                    len(rgb_paths), len(depth_paths), len(anno_paths)), "green"))
+
 
     elif args.test_dataset == "OCID":
         args.dataset_path = 'detectron2_datasets/OCID-dataset'
@@ -221,8 +233,6 @@ def run_eval(args):
     initial_pred_times = []
     refined_pred_times = []
     for rgb_path, depth_path, anno_path in zip(tqdm(rgb_paths), depth_paths, anno_paths):
-        assert os.path.basename(rgb_path) == os.path.basename(depth_path)
-        assert os.path.basename(rgb_path) == os.path.basename(anno_path)
         # if os.path.basename(rgb_path) in ['learn25.png', 'learn26.png', 'test25.png', 'test26.png', 'test49.png']:
             # continue    
 
@@ -281,7 +291,10 @@ def run_eval(args):
                 os.makedirs(vis_dir)
             rgb_img = cv2.imread(rgb_path)
             rgb_img = cv2.resize(rgb_img, (W, H))
-            depth_img = imageio.imread(depth_path)
+            if '.npy' in depth_path:
+                depth_img = np.load(depth_path)
+            else:
+                depth_img = imageio.imread(depth_path)
             depth_img = normalize_depth(depth_img)
             depth_img = cv2.resize(depth_img, (W, H), interpolation=cv2.INTER_NEAREST)
             depth_img = inpaint_depth(depth_img)
@@ -326,7 +339,7 @@ def run_eval(args):
         initial_metrics_all.append(initial_metrics)
         refined_metrics_all.append(refined_metrics)
         print(initial_metrics['obj_detected_075_percentage_normalized'], refined_metrics['obj_detected_075_percentage_normalized'])
-       
+    refined_pred_times = refined_pred_times[1:]
     avg_pred_time = np.sum(refined_pred_times) / len(refined_pred_times)
     std_pred_time = np.std(refined_pred_times)
     print("Average Prediction Time: {:.2f} ms".format(avg_pred_time * 1000))

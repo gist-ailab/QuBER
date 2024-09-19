@@ -112,7 +112,7 @@ CUDA_VISIBLE_DEVICES=2 python eval/run_eval.py --base-model npy --refiner-model 
 
 
 
-CUDA_VISIBLE_DEVICES=7 python eval/run_eval.py --base-model sam --test-dataset OSD --refiner-model mask-refiner --visualize --test-dataset OSD --config-file /SSDe/seunghyeok_back/mask-refiner/configs/uoais-sim/instance-segmentation/seed77/mask-refiner-rgb-concat-l2-gn-hf-b-fco-l3-b8.yaml 
+CUDA_VISIBLE_DEVICES=7 python eval/run_eval.py --base-model grounded-sam --test-dataset OSD --refiner-model maskrefiner --visualize --test-dataset OCID --config-file /SSDe/seunghyeok_back/mask-refiner/configs/uoais-sim/instance-segmentation/seed77/mask-refiner-rgb-concat-l2-gn-hf-b-fco-l3-b8.yaml 
 
 
 
@@ -136,4 +136,47 @@ CUDA_VISIBLE_DEVICES=4,5,6,7 python train_net.py --config-file configs/armbench/
 python train_net.py --config-file configs/armbench/instance-segmentation/seed77/mask-refiner-rgbd-concat-l2-gn-hf-b-fco-l3-b8_please.yaml --dist-url tcp://127.0.0.1:50157 --num-gpus 8 
 
 
+CUDA_VISIBLE_DEVICES=7 python eval/run_eval.py --base-model msmformer-zoomin --refiner-model hq-sam --visualize --test-dataset OSD 
 
+
+conda activate mask-refiner
+CUDA_VISIBLE_DEVICES=0 python eval/run_eval.py --base-model ucn-zoomin --refiner-model sam --test-dataset OCID --visualize
+CUDA_VISIBLE_DEVICES=1 python eval/run_eval.py --base-model ucn-zoomin --refiner-model hq-sam-pretrained --test-dataset OCID --visualize
+CUDA_VISIBLE_DEVICES=2 python eval/run_eval.py --base-model ucn-zoomin --refiner-model hq-sam --test-dataset OCID --visualize
+
+
+CUDA_VISIBLE_DEVICES=3 python eval/run_eval.py --base-model ucn-zoomin --refiner-model sam --test-dataset OCID
+CUDA_VISIBLE_DEVICES=4 python eval/run_eval.py --base-model msmformer-zoomin --refiner-model hq-sam-pretrained --test-dataset OCID 
+CUDA_VISIBLE_DEVICES=5 python eval/run_eval.py --base-model msmformer-zoomin --refiner-model hq-sam --test-dataset OCID 
+
+
+
+CUDA_VISIBLE_DEVICES=6 python eval/run_eval.py --base-model msmformer-zoomin --refiner-model hq-sam-pretrained --test-dataset WISDOM
+
+CUDA_VISIBLE_DEVICES=7 python eval/run_eval.py --base-model uoaisnet --refiner-model sam --test-dataset WISDOM
+CUDA_VISIBLE_DEVICES=4 python eval/run_eval.py --base-model uoaisnet --refiner-model hq-sam-pretrained --test-dataset WISDOM
+CUDA_VISIBLE_DEVICES=5 python eval/run_eval.py --base-model uoaisnet --refiner-model hq-sam --test-dataset WISDOM
+
+
+uoaisnet
+
+CUDA_VISIBLE_DEVICES=0 python eval/run_eval.py --base-model ucn-zoomin --refiner-model maskrefiner --config-file /SSDe/seunghyeok_back/mask-refiner/configs/uoais-sim/instance-segmentation/seed77/mask-refiner-rgb-concat-l2-gn-hf-b-fco-l3-b8.yaml --test-dataset WISDOM
+
+
+CUDA_VISIBLE_DEVICES=5 python eval/run_eval.py --base-model ucn-zoomin --refiner-model sam --test-dataset OCID 
+
+
+CUDA_VISIBLE_DEVICES=0 python eval/run_eval.py --base-model grounded-sam --test-dataset OSD --refiner-model maskrefiner --test-dataset OCID --config-file /SSDe/seunghyeok_back/mask-refiner/configs/uoais-sim/instance-segmentation/seed77/mask-refiner-rgb-concat-l2-gn-hf-b-fco-l3-b8.yaml 
+
+CUDA_VISIBLE_DEVICES=1 python eval/run_eval.py --base-model grounded-sam --test-dataset OSD --refiner-model maskrefiner --test-dataset OCID --config-file /SSDe/seunghyeok_back/mask-refiner/configs/uoais-sim/instance-segmentation/seed77/mask-refiner-rgb-concat-l2-gn-hf-b-fco-l3-b8.yaml 
+
+CUDA_VISIBLE_DEVICES=2 python eval/run_eval.py --base-model sam --test-dataset OCID --refiner-model maskrefiner --test-dataset OCID --config-file /SSDe/seunghyeok_back/mask-refiner/configs/uoais-sim/instance-segmentation/seed77/mask-refiner-rgb-concat-l2-gn-hf-b-fco-l3-b8.yaml 
+
+CUDA_VISIBLE_DEVICES=3 python eval/run_eval.py --base-model sam-depth --test-dataset OCID --refiner-model maskrefiner --test-dataset OCID --config-file /SSDe/seunghyeok_back/mask-refiner/configs/uoais-sim/instance-segmentation/seed77/mask-refiner-rgb-concat-l2-gn-hf-b-fco-l3-b8.yaml 
+
+
+CUDA_VISIBLE_DEVICES=0 python eval/run_eval.py --base-model grounded-sam --test-dataset OCID --refiner-model sam 
+CUDA_VISIBLE_DEVICES=1 python eval/run_eval.py --base-model grounded-sam --test-dataset OCID --refiner-model hq-sam-pretrained 
+CUDA_VISIBLE_DEVICES=3 python eval/run_eval.py --base-model grounded-sam --test-dataset OCID --refiner-model cascadepsp
+
+CUDA_VISIBLE_DEVICES=7 python eval/run_eval.py --base-model ucn-zoomin --test-dataset OSD --refiner-model hq-sam --visualize

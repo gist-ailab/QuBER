@@ -1,6 +1,7 @@
 
+Install Quber
 ```
-conda create -n mask-refiner python=3.8
+conda create -n quber python=3.8
 install torch, detectron2
 conda install pytorch==1.10.0 torchvision==0.11.0 torchaudio==0.10.0 cudatoolkit=11.3 -c pytorch -c conda-forge
 pip install torch==1.10.0+cu102 torchvision==0.11.0+cu102 torchaudio==0.10.0 -f https://download.pytorch.org/whl/torch_stable.html
@@ -28,4 +29,6 @@ cd uoais && python setup.py install build
 pip install segmentation_refinement
 ```
 
-rsync -rv --progress -e "ssh -i /home/seunghyeok_back/AICA_490.pem" mix-object-tote ubuntu@114.110.134.10:/home/ubuntu/armbench
+ssh -i AICA_490.pem ubuntu@114.110.134.10
+
+rsync -avz -e "ssh -i ~AICA_490.pem" mix-object-tote ubuntu@114.110.134.10:/data/seunghyeok_back/armbench

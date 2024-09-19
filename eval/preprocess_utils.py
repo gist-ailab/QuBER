@@ -22,7 +22,8 @@ def normalize_depth(depth, min_val=250.0, max_val=1500.0):
     depth[depth < min_val] = min_val
     depth[depth > max_val] = max_val
     depth = (depth - min_val) / (max_val - min_val) * 255
-    depth = np.expand_dims(depth, -1)
+    if len(depth.shape) == 2:
+        depth = np.expand_dims(depth, -1)
     depth = np.uint8(np.repeat(depth, 3, -1))
     return depth
 

@@ -13,13 +13,16 @@ import sys
 sys.path.append(os.getcwd())
 from preprocess_utils import standardize_image, inpaint_depth, normalize_depth, array_to_tensor, compute_xyz
 
-# import rice.src.data_augmentation as data_augmentation
-# import rice.src.graph_construction as gc
-# import rice.src.graph_networks as gn
-# import rice.src.merge_split_networks as msn
-# import rice.src.delete_network as delnet
-# import rice.src.sample_tree_cem as stc
-# import rice.src.network_config as nc
+# import parent directory of this file
+# get parent of current file path
+sys.path.append('/SSDe/seunghyeok_back/mask-refiner/ext_modules')
+import rice.src.data_augmentation as data_augmentation
+import rice.src.graph_construction as gc
+import rice.src.graph_networks as gn
+import rice.src.merge_split_networks as msn
+import rice.src.delete_network as delnet
+import rice.src.sample_tree_cem as stc
+import rice.src.network_config as nc
 
 import open3d as o3d
 from maskrefiner.predictor import MaskRefinerPredictor
@@ -222,15 +225,11 @@ class MaskRefiner():
 
         if self.dataset == 'armbench':
             rgb_img = cv2.imread(rgb_path)
-
-
             h, w = detectron2.data.transforms.ResizeShortestEdge.get_output_shape(rgb_img.shape[0], rgb_img.shape[1], 800, 1333)
             rgb_img = cv2.resize(rgb_img, (w, h))
-            print(rgb_img.shape)
             if initial_masks.dtype == np.bool:
                 initial_masks = np.uint8(initial_masks) * 255
             initial_masks = np.array([cv2.resize(mask, (w, h), interpolation=cv2.INTER_NEAREST) for mask in initial_masks])
-            print(initial_masks.shape)
             
 
             start_time = time.time()
@@ -246,10 +245,16 @@ class MaskRefiner():
 
         else:
             rgb_img = cv2.imread(rgb_path)
-            depth_img = imageio.imread(depth_path)
+            if 'npy' in depth_path:
+                depth_img = np.load(depth_path)
+            else:
+                depth_img = imageio.imread(depth_path)
             rgb_img = cv2.resize(rgb_img, (W, H))
             zero_depth = np.where(depth_img == 0)
-            depth_img = normalize_depth(depth_img)
+            if 'npy' in depth_path:
+                depth_img = normalize_depth(depth_img, 0.25, 1.5)
+            else:
+                depth_img = normalize_depth(depth_img)
             depth_img = cv2.resize(depth_img, (W, H), interpolation=cv2.INTER_NEAREST)
             depth_img = inpaint_depth(depth_img)
 
@@ -258,23 +263,19 @@ class MaskRefiner():
             
 
             start_time = time.time()
-
             output = self.refiner_predictor.predict(rgb_img, depth_img, initial_masks)[0]
-            print('network', time.time()-start_time)
             if "instances" not in output.keys():
                 refined_masks = []
             else:
                 refined_instances = output['instances'].to('cpu')
                 refined_masks = refined_instances.pred_masks.detach().cpu().numpy()
-            print('detach', time.time()-start_time)
+            time_elapsed = time.time() - start_time
             fg_mask = self.lmffnet.predict(rgb_path, depth_path)
-            print('lmff', time.time()-start_time)
             filt_masks = []
             for refined_mask in refined_masks:
                 if np.sum(np.bitwise_and(refined_mask, fg_mask)) / np.sum(refined_mask) > 0.3:
                     filt_masks.append(refined_mask)
-            print('filter1', time.time()-start_time)
-
+            time_elapsed = time.time() - start_time
             if self.dataset == 'OCID':
                 # The methods using the xyz images (e.g RICE, UOIS, UCN, MSMFormer) automatically filter out the zero-depth pixels.
                 # DoPose dataset's labels are 0 for zero-depth pixels.
@@ -286,13 +287,13 @@ class MaskRefiner():
                 filt_masks = filt_masks2
                 refined_masks = np.asarray(filt_masks)
 
+
             # events = prof.events()
             # forward_flops = sum([int(evt.flops) for evt in events]) 
             # time_elapsed = forward_flops / 1e9
             # print(time_elapsed)
             # time.sleep(1000)
-            time_elapsed = time.time() - start_time
-            print(time_elapsed)
+
         return refined_masks, output, time_elapsed, fg_mask # [N, H, W], bool
 
 
@@ -318,15 +319,15 @@ class CascadePSP():
                 new_dict[name] = v
             self.refiner.model.load_state_dict(new_dict)
 
-        else:
-            model_path = '/ailab_mat/personal/maeng_jemo/unstructured/CascadePSP/weights/20240401_rgbonly_pretrained_2024-04-01_02:18:22/model_40000'
-            model_dict = torch.load(model_path, map_location={'cuda:0': 'cuda:0'})
-            new_dict = {}
-            for k, v in model_dict.items():
-                print(k)
-                name = k[7:] # Remove module. from dataparallel
-                new_dict[name] = v
-            self.refiner.model.load_state_dict(new_dict)
+        # else:
+            # model_path = '/ailab_mat/personal/maeng_jemo/unstructured/CascadePSP/weights/20240401_rgbonly_pretrained_2024-04-01_02:18:22/model_40000'
+            # model_dict = torch.load(model_path, map_location={'cuda:0': 'cuda:0'})
+            # new_dict = {}
+            # for k, v in model_dict.items():
+            #     print(k)
+            #     name = k[7:] # Remove module. from dataparallel
+            #     new_dict[name] = v
+            # self.refiner.model.load_state_dict(new_dict)
         self.refiner.model.eval().to('cuda:0')
 
         
@@ -403,7 +404,7 @@ class CascadePSP():
 
 class RICE():
 
-    def __init__(self, repo_path='./rice', base_model='uoisnet3d', dataset='OSD'):
+    def __init__(self, repo_path='./ext_modules/rice', base_model='uoisnet3d', dataset='OSD'):
         # SplitNet
         splitnet_config = nc.get_splitnet_config(repo_path + '/configs/splitnet.yaml')
         sn_wrapper = msn.SplitNetWrapper(splitnet_config)
@@ -447,12 +448,6 @@ class RICE():
             sgsnet_wrapper,
             rice_config,
         )
-
-        # print(parameter_count_table(sn_wrapper.model))
-        # print(parameter_count_table(mn_wrapper.model))
-        print(parameter_count_table(sgsnet_wrapper.model))
-        print(parameter_count_table(dn_wrapper.model))
-        print(parameter_count_table(rn50_fpn))
 
 
         self.base_model = base_model
@@ -558,13 +553,15 @@ from segment_anything.utils.transforms import ResizeLongestSide
 
 class SAMRefiner():
 
-    def __init__(self, prompt_type='mask', dataset='OSD', hq=False):
+    def __init__(self, prompt_type='mask', dataset='OSD', hq=False, pretrained=False):
 
         # else:
         if hq:
             from segment_anything_hq import sam_model_registry, SamPredictor
-            # self.sam = sam_model_registry['vit_h'](checkpoint='./sam/sam_hq_vit_h.pth')
-            self.sam = sam_model_registry['vit_h'](checkpoint='/SSDe/seunghyeok_back/mask-refiner/sam-hq/train/work_dirs/hq_sam_h_uoais_sim_new/sam_hq_epoch_0.pth')
+            if pretrained:
+                self.sam = sam_model_registry['vit_h'](checkpoint='./sam/sam_hq_vit_h.pth')
+            else:
+                self.sam = sam_model_registry['vit_h'](checkpoint='/SSDe/seunghyeok_back/mask-refiner/sam-hq/train/work_dirs/hq_sam_h_uoais_sim_new/sam_hq_epoch_0.pth')
             self.sam = self.sam.cuda()
             self.sam_predictor = SamPredictor(self.sam)
         else:
@@ -753,8 +750,8 @@ class SAMRefiner():
 
         rgb_img = cv2.imread(rgb_path)
         rgb_img = cv2.resize(rgb_img, (self.W, self.H))
-        start_time = time.time()
         self.sam_predictor.reset_image()
+        start_time = time.time()
         self.sam_predictor.set_image(rgb_img, image_format="BGR")
         
         
@@ -787,12 +784,12 @@ class SAMRefiner():
                 pred_masks.append(masks == id)
         pred_masks = np.array(pred_masks)
             
-        if self.dataset == 'OCID':
-            refined_masks = []
-            for pred_mask in pred_masks:
-                refined_mask = np.where(zero_depth, False, pred_mask)
-                refined_masks.append(refined_mask)
-            pred_masks = np.array(refined_masks)
+        # if self.dataset == 'OCID':
+        #     refined_masks = []
+        #     for pred_mask in pred_masks:
+        #         refined_mask = np.where(zero_depth, False, pred_mask)
+        #         refined_masks.append(refined_mask)
+        #     pred_masks = np.array(refined_masks)
         time_elapsed = time.time() - start_time
         
         return pred_masks, None, time_elapsed, None

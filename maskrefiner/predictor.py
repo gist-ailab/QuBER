@@ -223,6 +223,7 @@ class MaskRefinerPredictor():
             self.cfg.MODEL.WEIGHTS = config_file.replace('.yaml', '/{}'.format(weights_file)).replace('configs', 'output')
         else:
             self.cfg.MODEL.WEIGHTS = config_file.replace('.yaml', '/model_final.pth').replace('configs', 'output')
+        self.cfg.MODEL.WEIGHTS = '/SSDe/seunghyeok_back/mask-refiner/model_0219999.pth'
         print('Loading weights file: ', self.cfg.MODEL.WEIGHTS )
         checkpointer = DetectionCheckpointer(self.model)
         checkpointer.load(self.cfg.MODEL.WEIGHTS)
@@ -346,12 +347,12 @@ class MaskRefinerPredictor():
         
         offsets = np.stack([center, offset[0], offset[1]], axis=0)
         # visualize
-        import matplotlib.pyplot as plt
-        fig, axs = plt.subplots(1, 3, figsize=(15, 5))
-        axs[0].imshow(center)
-        axs[1].imshow(offset[0])
-        axs[2].imshow(offset[1])
-        plt.savefig('offsets.png')
+        # import matplotlib.pyplot as plt
+        # fig, axs = plt.subplots(1, 3, figsize=(15, 5))
+        # axs[0].imshow(center)
+        # axs[1].imshow(offset[0])
+        # axs[2].imshow(offset[1])
+        # plt.savefig('offsets.png')
         offsets = torch.as_tensor(offsets.astype(np.float32))
         inputs["initial_pred_offset"] = offsets
         output = self.model([inputs])
