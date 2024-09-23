@@ -1,12 +1,12 @@
-# INSTA-BEEER
+# QuBER
 
-This repository contains the source codes for the paper "INSTA-BEEER: Explicit Error Estimation and Refinement for Fast and Accurate Unseen Object Instance Segmentation". 
+This repository contains the source codes for the paper "High-quality Unknown Object Instance Segmentation via Quadruple Boundary Error Refinement". 
 
 The paper has been authored by Seunghyeok Back, Sangbeom Lee, Kangmin Kim, Joosoon Lee, Sungho Shin, Jaemo Maeng, and Kyoobin Lee.
 
 ## Project Status
 
-The project is currently under review. We will make the full codebase public once it has been accepted. In the meantime, feel free to watch this space for updates. If you're interested in our work, please consider starring this repository or 'watch' it to get notifications on updates.
+The project is currently under review, and the current code is not polished yet. In the meantime, feel free to watch this space for updates. If you're interested in our work, please consider starring this repository or 'watch' it to get notifications on updates.
 
 ## Contact
 
