@@ -1,0 +1,12 @@
+opencv-python
+imageio
+imgviz
+pandas
+scipy
+IPython
+segment_anything
+open3d
+monai
+pyfastnoisesimd
+rapidfuzz
+termcolor
